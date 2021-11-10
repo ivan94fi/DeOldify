@@ -37,7 +37,8 @@ app = Flask(__name__)
 
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 # define a predict function as an endpoint
 @app.route("/process", methods=["POST"])
@@ -47,12 +48,12 @@ def process_video():
     output_path = os.path.join(results_video_directory, os.path.basename(input_path))
 
     try:
-        if 'file' in request.files:
-            file = request.files['file']
+        if "file" in request.files:
+            file = request.files["file"]
             if allowed_file(file.filename):
                 file.save(input_path)
             try:
-                render_factor = request.form.getlist('render_factor')[0]
+                render_factor = request.form.getlist("render_factor")[0]
             except:
                 render_factor = 30
 
@@ -65,14 +66,12 @@ def process_video():
             except:
                 render_factor = 30
 
-
-        
         video_path = video_colorizer.colorize_from_url(
-          source_url=url, file_name=input_path, render_factor=render_factor
+            source_url=url, file_name=input_path, render_factor=render_factor
         )
-        
+
         callback = send_file(output_path, mimetype="application/octet-stream")
-        
+
         return callback, 200
 
     except:
@@ -83,12 +82,12 @@ def process_video():
         clean_all([input_path, output_path])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     global upload_directory
     global results_video_directory
     global video_colorizer
     global ALLOWED_EXTENSIONS
-    ALLOWED_EXTENSIONS = set(['mp4'])
+    ALLOWED_EXTENSIONS = set(["mp4"])
 
     upload_directory = "/data/upload/"
     create_directory(upload_directory)
@@ -99,10 +98,8 @@ if __name__ == '__main__':
     model_directory = "/data/models/"
     create_directory(model_directory)
 
-    video_model_url = (
-        "https://data.deepai.org/deoldify/ColorizeVideo_gen.pth"
-    )
-    
+    video_model_url = "https://data.deepai.org/deoldify/ColorizeVideo_gen.pth"
+
     get_model_bin(
         video_model_url, os.path.join(model_directory, "ColorizeVideo_gen.pth")
     )

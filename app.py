@@ -38,25 +38,26 @@ app = Flask(__name__)
 
 
 def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 # define a predict function as an endpoint
 @app.route("/process", methods=["POST"])
 def process_image():
 
-    input_path = generate_random_filename(upload_directory,"jpeg")
+    input_path = generate_random_filename(upload_directory, "jpeg")
     output_path = os.path.join(results_img_directory, os.path.basename(input_path))
 
     try:
-        if 'file' in request.files:
-            file = request.files['file']
+        if "file" in request.files:
+            file = request.files["file"]
             if allowed_file(file.filename):
                 file.save(input_path)
             try:
-                render_factor = request.form.getlist('render_factor')[0]
+                render_factor = request.form.getlist("render_factor")[0]
             except:
                 render_factor = 30
-            
+
         else:
             url = request.json["url"]
             download(url, input_path)
@@ -69,43 +70,51 @@ def process_image():
         result = None
 
         try:
-            result = image_colorizer.get_transformed_image(input_path, render_factor=render_factor, post_process=True, watermarked=True)
+            result = image_colorizer.get_transformed_image(
+                input_path,
+                render_factor=render_factor,
+                post_process=True,
+                watermarked=True,
+            )
         except:
             convertToJPG(input_path)
-            result = image_colorizer.get_transformed_image(input_path, render_factor=render_factor, post_process=True, watermarked=True)
+            result = image_colorizer.get_transformed_image(
+                input_path,
+                render_factor=render_factor,
+                post_process=True,
+                watermarked=True,
+            )
         finally:
             if result is not None:
                 result.save(output_path, quality=95)
                 result.close()
 
-        callback = send_file(output_path, mimetype='image/jpeg')
+        callback = send_file(output_path, mimetype="image/jpeg")
         return callback, 200
 
     except:
         traceback.print_exc()
-        return {'message': 'input error'}, 400
+        return {"message": "input error"}, 400
 
     finally:
         pass
-        clean_all([
-            input_path,
-            output_path
-            ])
+        clean_all([input_path, output_path])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     global upload_directory
     global results_img_directory
     global image_colorizer
     global ALLOWED_EXTENSIONS
-    ALLOWED_EXTENSIONS = set(['png', 'jpg', 'jpeg'])
+    ALLOWED_EXTENSIONS = set(["png", "jpg", "jpeg"])
 
-    upload_directory = '/data/upload/'
+    upload_directory = "/data/upload/"
     create_directory(upload_directory)
 
-    results_img_directory = '/data/result_images/'
+    results_img_directory = "/data/result_images/"
     create_directory(results_img_directory)
 
-    model_directory = '/data/models/'
+    model_directory = "/data/models/"
     create_directory(model_directory)
 
     artistic_model_url = "https://data.deepai.org/deoldify/ColorizeArtistic_gen.pth"
