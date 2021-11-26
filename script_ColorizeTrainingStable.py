@@ -8,6 +8,19 @@
 # * This model prioritizes stable and reliable renderings.  It does particularly well on portraits and landscapes.  It's not as colorful as the artistic model.
 
 # NOTE:  This must be the first call in order to work properly!
+import warnings
+
+warnings.filterwarnings(
+    action="ignore",
+    category=UserWarning,
+    module=r"torch.nn.functional",
+)
+warnings.filterwarnings(
+    action="ignore",
+    category=UserWarning,
+    module=r"fastai.data_block",
+)
+
 from deoldify import device
 from deoldify.device_id import DeviceId
 
