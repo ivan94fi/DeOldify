@@ -39,25 +39,42 @@ from fastai.vision.gan import *
 from PIL import Image, ImageDraw, ImageFile, ImageFont
 
 from deoldify.critics import *
-from deoldify.dataset import *
+from deoldify.dataset import get_colorize_data
 from deoldify.generators import *
 from deoldify.loss import *
 from deoldify.save import *
 
 # ## Setup
 
+# Path to hr images
 path = Path("data/imagenet/ILSVRC/Data/CLS-LOC")
 path_hr = path
-path_lr = path / "bandw"
+# Path to lr images
+path_lr = path / "degraded"
+
+print("hr images (path): {}".format(path))
+print("hr images (path_hr): {}".format(path_hr))
+print("lr images (path_lr): {}".format(path_lr))
 
 proj_id = "StableModel"
 
+# Path to folder containing generated images
+# Name of generator checkpoints excuted in GAN mode (StabelModel_gen_<number>.pth)
 gen_name = proj_id + "_gen"
+# Name of pretrained generator checkpoint (always ends in _0, rewritten when changing input size)
 pre_gen_name = gen_name + "_0"
+# Name of discriminator checkpoints
 crit_name = proj_id + "_crit"
 
+print("Normal generator checkpoint name (gen_name): {}".format(gen_name))
+print("Pretrained generator checkpoint name (pre_gen_name): {}".format(pre_gen_name))
+print("Discriminator checkpoint name (crit_name): {}".format(crit_name))
+
+# Generated images directory (StableModel_image_gen)
 name_gen = proj_id + "_image_gen"
+# Generated images path
 path_gen = path / name_gen
+print("Generated images path (path_gen): {}".format(path_gen))
 
 TENSORBOARD_PATH = Path("data/tensorboard/" + proj_id)
 
@@ -122,71 +139,91 @@ def save_gen_images():
 
 # Only runs if the directory isn't already created.
 if not path_lr.exists():
+    print("Creating degraded images")
     il = ImageList.from_folder(path_hr)
     parallel(create_training_images, il.items)
 
 # ## Pre-train generator
 
+do_64 = True
+do_128 = False
+do_192 = False
 # #### NOTE
 # Most of the training takes place here in pretraining for NoGAN.  The goal here is to take the generator as far as possible with conventional training, as that is much easier to control and obtain glitch-free results compared to GAN training.
 
 # #######################################################
 # ### 64px version
 
-bs = 88
-sz = 64
-keep_pct = 1.0
+if do_64:
+    bs = 88
+    sz = 64
+    keep_pct = 1.0
 
-# dataloader, gets data from crappy/good paths
-data_gen = get_data(bs=bs, sz=sz, keep_pct=keep_pct)
+    # dataloader, gets data from crappy/good paths
+    # get all dataset (pct == 1), with 0.1% of validation
+    data_gen = get_data(bs=bs, sz=sz, keep_pct=keep_pct)
 
-# generator learner: unet_wide with vgg16 feature loss
-learn_gen = gen_learner_wide(data=data_gen, gen_loss=FeatureLoss(), nf_factor=nf_factor)
+    # generator learner: unet_wide with vgg16 feature loss
+    learn_gen = gen_learner_wide(data=data_gen, gen_loss=FeatureLoss(), nf_factor=nf_factor)
 
-learn_gen.callback_fns.append(
-    partial(ImageGenTensorboardWriter, base_dir=TENSORBOARD_PATH, name="GenPre")
-)
+    learn_gen.callback_fns.append(
+        partial(ImageGenTensorboardWriter, base_dir=TENSORBOARD_PATH, name="GenPre")
+    )
 
-# train for one epoch, using one-cycle lr scheduling policy
-learn_gen.fit_one_cycle(1, pct_start=0.8, max_lr=slice(1e-3))
+    # train for one epoch, using one-cycle lr scheduling policy
+    # The encoder part is a pretrained, frozen resnet101
+    print("Generator pretrain: {}".format(sz))
+    learn_gen.fit_one_cycle(1, pct_start=0.8, max_lr=slice(1e-3))
 
-learn_gen.save(pre_gen_name)
+    # save the weights
+    learn_gen.save(pre_gen_name)
 
-learn_gen.unfreeze()
+    # unfreeze the encoder
+    learn_gen.unfreeze()
 
-learn_gen.fit_one_cycle(1, pct_start=pct_start, max_lr=slice(3e-7, 3e-4))
+    # train for one epoch: now the whole net is unfrozen
+    learn_gen.fit_one_cycle(1, pct_start=pct_start, max_lr=slice(3e-7, 3e-4))
 
-learn_gen.save(pre_gen_name)
+    # save the weights
+    learn_gen.save(pre_gen_name)
 
 # #######################################################
 # ### 128px version
 
-bs = 20
-sz = 128
-keep_pct = 1.0
+if do_128:
+    bs = 20
+    sz = 128
+    keep_pct = 1.0
 
-learn_gen.data = get_data(sz=sz, bs=bs, keep_pct=keep_pct)
+    # Construct new dataloader with different batch size and input size
+    learn_gen.data = get_data(sz=sz, bs=bs, keep_pct=keep_pct)
 
-learn_gen.unfreeze()
+    # This should be useless, model is already unfrozen
+    learn_gen.unfreeze()
 
-learn_gen.fit_one_cycle(1, pct_start=pct_start, max_lr=slice(1e-7, 1e-4))
+    # Continue training, different lr parameters
+    print("Generator pretrain: {}".format(sz))
+    learn_gen.fit_one_cycle(1, pct_start=pct_start, max_lr=slice(1e-7, 1e-4))
 
-learn_gen.save(pre_gen_name)
+    learn_gen.save(pre_gen_name)
 
 # #######################################################
 # ### 192px version
+# Same as before but only use half dataset, lower lrs?
 
-bs = 8
-sz = 192
-keep_pct = 0.50
+if do_192:
+    bs = 8
+    sz = 192  # final size
+    keep_pct = 0.50  # keep half dataset
 
-learn_gen.data = get_data(sz=sz, bs=bs, keep_pct=keep_pct)
+    learn_gen.data = get_data(sz=sz, bs=bs, keep_pct=keep_pct)
 
-learn_gen.unfreeze()
+    learn_gen.unfreeze()
 
-learn_gen.fit_one_cycle(1, pct_start=pct_start, max_lr=slice(5e-8, 5e-5))
+    print("Generator pretrain: {}".format(sz))
+    learn_gen.fit_one_cycle(1, pct_start=pct_start, max_lr=slice(5e-8, 5e-5))
 
-learn_gen.save(pre_gen_name)
+    learn_gen.save(pre_gen_name)
 
 # #######################################################
 # ## Repeatable GAN Cycle
@@ -204,18 +241,21 @@ crit_new_checkpoint_name = crit_name + "_" + str(checkpoint_num)
 # ### Save Generated Images
 
 bs = 8
-sz = 192
+sz = 192  # final size
 
+# final generator
 learn_gen = gen_learner_wide(
     data=data_gen, gen_loss=FeatureLoss(), nf_factor=nf_factor
 ).load(gen_old_checkpoint_name, with_opt=False)
 
+print("Saving generated images")
 save_gen_images()
 
 # ### Pretrain Critic
 
 # ##### Only need full pretraining of critic when starting from scratch.  Otherwise, just finetune!
 
+# On the first iteration train only discriminator for 6 epochs
 if old_checkpoint_num == 0:
     bs = 64
     sz = 128
@@ -227,6 +267,7 @@ if old_checkpoint_num == 0:
     learn_critic.callback_fns.append(
         partial(LearnerTensorboardWriter, base_dir=TENSORBOARD_PATH, name="CriticPre")
     )
+    print("Discriminator pretrain: {}".format(sz))
     learn_critic.fit_one_cycle(6, 1e-3)
     learn_critic.save(crit_old_checkpoint_name)
 

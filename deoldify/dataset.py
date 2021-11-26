@@ -20,7 +20,9 @@ def get_colorize_data(
 
     src = (
         ImageImageList.from_folder(crappy_path, convert_mode="RGB")
+        # Use only a % of the full dataset
         .use_partial_data(sample_pct=keep_pct, seed=random_seed)
+        # Put random 0.1% of data in validation set
         .split_by_rand_pct(0.1, seed=random_seed)
     )
 
