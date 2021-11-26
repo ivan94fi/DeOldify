@@ -164,7 +164,9 @@ if do_64:
     data_gen = get_data(bs=bs, sz=sz, keep_pct=keep_pct)
 
     # generator learner: unet_wide with vgg16 feature loss
-    learn_gen = gen_learner_wide(data=data_gen, gen_loss=FeatureLoss(), nf_factor=nf_factor)
+    learn_gen = gen_learner_wide(
+        data=data_gen, gen_loss=FeatureLoss(), nf_factor=nf_factor
+    )
 
     learn_gen.callback_fns.append(
         partial(ImageGenTensorboardWriter, base_dir=TENSORBOARD_PATH, name="GenPre")
@@ -176,6 +178,7 @@ if do_64:
     learn_gen.fit_one_cycle(1, pct_start=0.8, max_lr=slice(1e-3))
 
     # save the weights
+    print("Save pretrained generator at: {}".format(pre_gen_name))
     learn_gen.save(pre_gen_name)
 
     # unfreeze the encoder
@@ -205,6 +208,7 @@ if do_128:
     print("Generator pretrain: {}".format(sz))
     learn_gen.fit_one_cycle(1, pct_start=pct_start, max_lr=slice(1e-7, 1e-4))
 
+    print("Save pretrained generator at: {}".format(pre_gen_name))
     learn_gen.save(pre_gen_name)
 
 # #######################################################
@@ -223,6 +227,7 @@ if do_192:
     print("Generator pretrain: {}".format(sz))
     learn_gen.fit_one_cycle(1, pct_start=pct_start, max_lr=slice(5e-8, 5e-5))
 
+    print("Save pretrained generator at: {}".format(pre_gen_name))
     learn_gen.save(pre_gen_name)
 
 # #######################################################
@@ -255,6 +260,7 @@ save_gen_images()
 
 # ##### Only need full pretraining of critic when starting from scratch.  Otherwise, just finetune!
 
+print(" ===== Start GAN repeatable cycle =====")
 # On the first iteration train only discriminator for 6 epochs
 if old_checkpoint_num == 0:
     bs = 64
