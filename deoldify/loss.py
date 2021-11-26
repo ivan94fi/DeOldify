@@ -3,13 +3,16 @@ from fastai.core import *
 from fastai.torch_core import *
 from fastai.callbacks import hook_outputs
 import torchvision.models as models
+from deoldify import device
 
 
 class FeatureLoss(nn.Module):
     def __init__(self, layer_wgts=[20, 70, 10]):
         super().__init__()
 
-        self.m_feat = models.vgg16_bn(True).features.cuda().eval()
+        self.m_feat = models.vgg16_bn(True).features.eval()
+        if device.is_gpu():
+            self.m_feat = self.m_feat.cuda()
         requires_grad(self.m_feat, False)
         blocks = [
             i - 1
